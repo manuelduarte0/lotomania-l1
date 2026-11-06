@@ -1,0 +1,190 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Analisador Lotomania PRO - L1</title><style>
+body{background:#0A0A0A;color:#fff;font-family:Arial;margin:0;padding:15px;text-align:center;overflow-x:hidden}
+h1{color:#00BFFF}
+input{width:120px;padding:10px;border-radius:8px;border:2px solid #00BFFF;background:#222;color:#fff;text-align:center;margin:3px}
+button{padding:10px 15px;background:#00BFFF;border:none;border-radius:10px;cursor:pointer;font-weight:bold;margin:5px;color:#000}
+.cabecalho{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;max-width:600px;margin:0 auto 5px auto}
+.colNum{text-align:center;font-weight:bold;color:#00BFFF;font-size:12px}
+.tabela{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;max-width:600px;margin:20px auto}
+.numero{aspect-ratio:1/1;border:1px solid #444;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:bold;background:#222;font-size:14px}
+.sorteado{background:#00BFFF!important;color:#000}
+.boxInfo{background:#111;border:2px solid #00BFFF;padding:15px;margin:15px auto;border-radius:10px;max-width:600px;text-align:left}
+.boxInfo b{color:#00BFFF}
+.menuLateral{position:fixed;top:0;right:-350px;width:330px;height:100%;background:#0A0A0A;border-left:2px solid #00BFFF;transition:0.3s;padding:15px;overflow-y:auto;z-index:999;text-align:left}
+.menuLateral.ativo{right:0}
+.menuLateral h2{color:#00BFFF;text-align:center;font-size:18px}
+.btnPasta{background:#111;border:2px solid #00BFFF;color:#00BFFF;width:100%;margin:8px 0;padding:12px;text-align:left;border-radius:10px;font-size:15px}
+.btnPasta:hover{background:#00BFFF;color:#000}
+.jogoSalvo{background:#222;padding:10px;margin:8px 0;border-radius:8px;border:1px solid #444;font-size:12px;position:relative;padding-right:40px}
+.btnDel{position:absolute;top:8px;right:8px;background:red;border:none;color:#fff;border-radius:5px;padding:3px 8px}
+.sequencia{background:#1a3d5c;padding:8px;margin:5px 0;border-radius:6px;border:1px solid #00BFFF;font-size:12px}
+.btnFechar{position:absolute;top:15px;right:15px;background:red;color:#fff;border:none;border-radius:50%;width:35px;height:35px;font-size:18px;cursor:pointer}
+.abas{display:flex;gap:5px;margin:10px 0}
+.aba{flex:1;padding:10px;background:#222;border:1px solid #444;cursor:pointer;color:#fff;border-radius:8px}
+.aba.ativa{background:#00BFFF;color:#000}
+.tituloRep{background:#00BFFF;color:#000;padding:8px;border-radius:8px;margin-top:15px;font-weight:bold;text-align:center}
+.repItem{background:#222;padding:8px;margin:5px 0;border-radius:6px;border-left:3px solid #00FF00}
+</style></head><body>
+<button onclick="abrirMenu()" style="position:absolute;top:15px;right:15px">📂 PASTAS</button>
+<h1>🎯 Analisador Lotomania PRO - L1 a L10</h1>
+De: <input type="number" id="de" placeholder="2901">
+Até: <input type="number" id="ate" placeholder="2910"><br>
+<button onclick="buscarIntervalo()">🔍 PESQUISAR</button>
+<button onclick="ultimo()">ULTIMO</button>
+<button onclick="anterior()">⬅ ANTERIOR</button>
+<button onclick="proximo()">PRÓXIMO ➡</button>
+<button onclick="copiarNumeros()">📋 COPIAR</button>
+<button onclick="salvarJogo()">💾 SALVAR JOGO</button>
+<div id="info"></div>
+<div class="cabecalho" id="cabecalho"></div>
+<div class="tabela" id="tabela"></div>
+<div class="menuLateral" id="menu">
+    <button class="btnFechar" onclick="fecharMenu()">X</button>
+    <h2>📁 Pastas por Linha</h2>
+    <button class="btnPasta" onclick="abrirPasta(3)">📁 Pasta 3 <span id="count3">(0)</span></button>
+    <button class="btnPasta" onclick="abrirPasta(4)">📁 Pasta 4 <span id="count4">(0)</span></button>
+    <button class="btnPasta" onclick="abrirPasta(5)">📁 Pasta 5 <span id="count5">(0)</span></button>
+    <button class="btnPasta" onclick="abrirPasta(6)">📁 Pasta 6 <span id="count6">(0)</span></button>
+    <div id="conteudoPasta"></div>
+</div>
+<script>
+const API="https://loteriascaixa-api.herokuapp.com/api/lotomania/";let numerosSorteados=[], concursoAtual=0;
+let jogosSalvos = JSON.parse(localStorage.getItem('jogosLotomania_L'));
+if(!jogosSalvos || typeof jogosSalvos[3] == 'undefined'){jogosSalvos = {3:[],4:[],5:[],6:[]};}
+
+function criarTabela(){
+    const t=document.getElementById('tabela');t.innerHTML="";
+    const c=document.getElementById('cabecalho');c.innerHTML="";
+    for(let i=1;i<=10;i++){c.innerHTML+='<div class="colNum">L'+i+'</div>'}
+    for(let i=1;i<=99;i++){let n=i.toString().padStart(2,'0');t.innerHTML+='<div class="numero" id="l'+n+'">'+n+'</div>'}
+    t.innerHTML+='<div class="numero" id="l00">00</div>'
+}
+function limparTabela(){document.querySelectorAll('.numero').forEach(el=>el.classList.remove('sorteado'));numerosSorteados=[];}
+
+function calcularLinhas(numeros){
+    let linhas = [0,0,0,0,0,0,0,0,0,0];
+    numeros.forEach(n=>{
+        let num = parseInt(n);
+        if(num == 0){linhas[9]++;}
+        else{
+            let linha = Math.ceil(num / 10);
+            linhas[linha-1]++;
+        }
+    });
+    return linhas;
+}
+
+function mostrar(data){
+    limparTabela();
+    let todosNumeros=[];
+    if(Array.isArray(data)){
+        data.forEach(concurso=>{todosNumeros.push(...concurso.dezenas);});
+        concursoAtual = data[0].concurso;
+        document.getElementById('info').innerHTML='<h2>Concursos '+data[0].concurso+' até '+data[data.length-1].concurso+'</h2>';
+    }else{
+        todosNumeros=data.dezenas;
+        concursoAtual = data.concurso;
+        document.getElementById('info').innerHTML='<h2>Concurso '+data.concurso+' - '+data.data+'</h2>';
+    }
+    numerosSorteados=[...new Set(todosNumeros)];
+    let linhas = calcularLinhas(numerosSorteados);
+    numerosSorteados.forEach(n=>{let el=document.getElementById('l'+n);if(el)el.classList.add('sorteado')});
+    let htmlLinhas = "<b>Contagem por Linha:</b><br>";
+    linhas.forEach((qtd,i)=>{htmlLinhas += 'L'+(i+1)+':'+qtd+' '});
+    document.getElementById('info').innerHTML+='<div class="boxInfo"><b>Números:</b> '+numerosSorteados.join(", ")+'<br><br>'+htmlLinhas+'</div>';
+    atualizarContadores();
+}
+function salvarJogo(){
+    if(numerosSorteados.length==0)return alert("Pesquise um concurso primeiro");
+    let linhas = calcularLinhas(numerosSorteados);
+    let linhas01 = [];
+    linhas.forEach((qtd,i)=>{if(qtd==0 || qtd==1) linhas01.push({linha:i+1,qtd:qtd});});
+    let qtdLinhas = linhas01.length;
+    if(qtdLinhas<3 || qtdLinhas>6) return alert('Esse jogo tem '+qtdLinhas+' linhas com 0 ou 1. Só salva nas Pastas 3 a 6');
+    let jogo = {concurso: concursoAtual,linhas01: linhas01,linhasCompleta: linhas};
+    jogosSalvos[qtdLinhas].push(jogo);
+    localStorage.setItem('jogosLotomania_L', JSON.stringify(jogosSalvos));
+    atualizarContadores();
+    alert('Jogo salvo na Pasta '+qtdLinhas+' - Concurso '+concursoAtual+'!');
+}
+function atualizarContadores(){[3,4,5,6].forEach(p=>{document.getElementById('count'+p).innerText = '('+jogosSalvos[p].length+')';})}
+function abrirPasta(num){
+    let div = document.getElementById('conteudoPasta');
+    let jogos = jogosSalvos[num];
+    let html = '<h3>📁 Pasta '+num+' - '+jogos.length+' jogos</h3>';
+    html += '<div class="abas"><div class="aba ativa" onclick="mostrarJogosPasta('+num+',this)">Jogos</div><div class="aba" onclick="mostrarSequenciasPasta('+num+',this)">Sequências</div></div>';
+    html += '<div id="listaPasta"></div>';
+    div.innerHTML = html;
+    mostrarJogosPasta(num);
+}
+function mostrarJogosPasta(num, el){
+    if(el){document.querySelectorAll('.aba').forEach(a=>a.classList.remove('ativa'));el.classList.add('ativa')}
+    let jogos = jogosSalvos[num];
+    let div = document.getElementById('listaPasta');div.innerHTML="";
+    if(jogos.length==0){div.innerHTML="<small>Nenhum jogo nessa pasta</small>";return}
+    jogos.forEach((jogo,i)=>{
+        let linTxt = jogo.linhas01.map(c=>'L'+c.linha+':'+c.qtd).join(" ");
+        div.innerHTML += '<div class="jogoSalvo"><b>Jogo '+(i+1)+'</b> <b>Concurso '+jogo.concurso+'</b> '+linTxt+'<button class="btnDel" onclick="deletarJogo('+num+','+i+')">X</button></div>';
+    })
+    let repeticoes = calcularRepeticoesParciais(jogos, num);
+    if(repeticoes.length > 0){
+        div.innerHTML += '<div class="tituloRep">--- REPETIÇÕES ---</div>';
+        repeticoes.forEach(rep=>{div.innerHTML += '<div class="repItem">'+rep+'</div>';})
+    }
+}
+function calcularRepeticoesParciais(jogos, pasta){
+    let resultado = [];
+    let minRepetir = 3;
+    let maxRepetir = pasta == 6? 5 : pasta;
+    for(let i=0;i<jogos.length;i++){
+        let linI = jogos[i].linhas01.map(c=>c.linha);
+        for(let j=i+1;j<jogos.length;j++){
+            let linJ = jogos[j].linhas01.map(c=>c.linha);
+            let iguais = linI.filter(c=>linJ.includes(c));
+            if(iguais.length >= minRepetir && iguais.length <= maxRepetir){
+                let linTexto = iguais.map(c=>'L'+c+':1').join(" ");
+                resultado.push('Jogo '+(i+1)+' e Jogo '+(j+1)+' saiu '+linTexto+' [ '+iguais.length+'x ]');
+            }
+        }
+    }
+    return resultado;
+}
+function mostrarSequenciasPasta(num, el){
+    if(el){document.querySelectorAll('.aba').forEach(a=>a.classList.remove('ativa'));el.classList.add('ativa')}
+    let jogos = jogosSalvos[num];
+    let div = document.getElementById('listaPasta');div.innerHTML="";
+    let mapa = {};
+    jogos.forEach(jogo=>{
+        let linCom1 = [];
+        jogo.linhasCompleta.forEach((qtd,i)=>{if(qtd==1) linCom1.push(i+1);});
+        if(linCom1.length>1){
+            let chave = linCom1.sort((a,b)=>a-b).join(",");
+            if(!mapa[chave]) mapa[chave] = [];
+            mapa[chave].push(jogo.concurso);
+        }
+    });
+    let achou = false;
+    for(let chave in mapa){
+        if(mapa[chave].length > 1){
+            achou = true;
+            div.innerHTML += '<div class="sequencia"><b>L'+chave.replace(/,/g,", L")+'</b><br>Repetiu: <b style="color:#00BFFF">'+mapa[chave].length+' vezes</b><br>Concursos: '+mapa[chave].join(", ")+'</div>';
+        }
+    }
+    if(!achou) div.innerHTML = "<small>Nenhuma sequência repetida nessa pasta</small>";
+}
+function deletarJogo(pasta, i){if(confirm("Deletar jogo?")){jogosSalvos[pasta].splice(i,1);localStorage.setItem('jogosLotomania_L', JSON.stringify(jogosSalvos));abrirPasta(pasta);atualizarContadores();}}
+function abrirMenu(){document.getElementById('menu').classList.add('ativo');atualizarContadores()}
+function fecharMenu(){document.getElementById('menu').classList.remove('ativo')}
+async function buscarIntervalo(){
+    let d=document.getElementById('de').value,a=document.getElementById('ate').value;
+    if(!d||!a)return alert("Preencha DE e ATÉ");
+    let todos=[];
+    for(let i=parseInt(d);i<=parseInt(a);i++){try{let r=await fetch(API+i);let data=await r.json();todos.push(data);}catch(e){}}
+    if(todos.length>0)mostrar(todos); else alert("Nenhum concurso encontrado")
+}
+async function ultimo(){let r=await fetch(API+"latest"),data=await r.json();document.getElementById('de').value=data.concurso;document.getElementById('ate').value=data.concurso;mostrar(data)}
+function proximo(){let d=parseInt(document.getElementById('de').value);if(!d)return alert("Pesquise um concurso primeiro");document.getElementById('de').value=d+1;document.getElementById('ate').value=d+1;buscarIntervalo()}
+function anterior(){let d=parseInt(document.getElementById('de').value);if(!d||d<=1)return alert("Concurso inválido");document.getElementById('de').value=d-1;document.getElementById('ate').value=d-1;buscarIntervalo()}
+function copiarNumeros(){if(numerosSorteados.length==0)return alert("Pesquise primeiro");navigator.clipboard.writeText(numerosSorteados.join(", "));alert("Números copiados: "+numerosSorteados.length+" números")}
+criarTabela();atualizarContadores();
+</script></body></html>
